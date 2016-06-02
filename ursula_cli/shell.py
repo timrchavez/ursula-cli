@@ -195,7 +195,8 @@ def _run_heat(args, hot):
     CREDS = {
         'username': os.environ['OS_USERNAME'],
         'password': os.environ['OS_PASSWORD'],
-        'tenant_name': os.environ['OS_TENANT_NAME'],
+        'tenant_name': (os.environ.get('OS_TENANT_NAME') or
+                        os.environ['OS_PROJECT_NAME']),
         'auth_url': os.environ['OS_AUTH_URL'],
     }
 
