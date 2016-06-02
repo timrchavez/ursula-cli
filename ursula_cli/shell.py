@@ -195,9 +195,18 @@ def _run_heat(args, hot):
     CREDS = {
         'username': os.environ['OS_USERNAME'],
         'password': os.environ['OS_PASSWORD'],
-        'tenant_name': os.environ['OS_TENANT_NAME'],
         'auth_url': os.environ['OS_AUTH_URL'],
     }
+
+    if 'OS_PROJECT_ID' in os.environ:
+        CREDS['project_id'] = os.environ['OS_PROJECT_ID']
+    elif 'OS_TENANT_ID' in os.environ:
+        CREDS['tenant_id'] = os.environ['OS_TENANT_ID']
+
+    if 'OS_PROJECT_NAME' in os.environ:
+        CREDS['project_name'] = os.environ['OS_PROJECT_NAME']
+    elif 'OS_TENANT_NAME' in os.environ:
+        CREDS['tenant_name'] = os.environ['OS_TENANT_NAME']
 
     if args.heat_stack_name:
         stack_name = args.heat_stack_name
