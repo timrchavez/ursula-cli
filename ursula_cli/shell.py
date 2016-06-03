@@ -34,6 +34,10 @@ LOG = logging.getLogger(__name__)
 MINIMUM_ANSIBLE_VERSION = '1.9'
 
 
+class OpenStackConfigurationError(Exception):
+    pass
+
+
 def init_logfile():
     config = ConfigParser()
     config.read('ansible.cfg')
@@ -193,12 +197,24 @@ def _run_heat(args, hot):
         raise Exception(e)
 
     CREDS = {
-        'username': os.environ['OS_USERNAME'],
-        'password': os.environ['OS_PASSWORD'],
-        'tenant_name': (os.environ.get('OS_TENANT_NAME') or
-                        os.environ['OS_PROJECT_NAME']),
-        'auth_url': os.environ['OS_AUTH_URL'],
+        'username': os.environ.get('OS_USERNAME'),
+        'password': os.environ.get('OS_PASSWORD'),
+        'tenant_name': os.environ.get(
+            'OS_TENANT_NAME', os.environ.get('OS_PROJECT_NAME')
+        ),
+        'auth_url': os.environ.get('OS_AUTH_URL'),
     }
+
+    ex_msg = (
+        "%s, ensure your environment (probably the stackrc file) is properly "
+        "configured with OpenStack credentials"
+    )
+    # Get name of CREDS key with a value of None and raise an exception
+    # because we're missing some obviously important creds data
+    if not all(CREDS.values()):
+        name = CREDS.keys()[CREDS.values().index(None)]
+        namestr = "%s is missing" % name
+        raise OpenStackConfigurationError(ex_msg % namestr)
 
     if args.heat_stack_name:
         stack_name = args.heat_stack_name
