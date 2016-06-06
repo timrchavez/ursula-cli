@@ -141,6 +141,40 @@ def _run_ansible(inventory, playbook, user='root', module_path='./library',
     return proc.returncode
 
 
+def _run_module(inventory, module, module_args, module_hosts='all',
+                 user='root', module_path='./library', sudo=False,
+                 extra_args=[]):
+    command = [
+        'ansible',
+        module_hosts,
+        '--inventory-file',
+        inventory,
+        '--module-name',
+        module,
+        '--user',
+        user,
+        '--module-path',
+        module_path,
+    ]
+
+    if sudo:
+        command.extend(['--become', '--become-method', 'sudo'])
+    command.extend(extra_args)
+    command.extend(["--args='{}'".format(module_args)])
+
+    LOG.debug("Running command: %s with environment: %s",
+              " ".join(command), os.environ)
+    proc = subprocess.Popen(" ".join(command), env=os.environ.copy(), shell=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT)
+
+    for line in iter(proc.stdout.readline, b''):
+        print line.rstrip()
+
+    proc.communicate()[0]
+    return proc.returncode
+
+
 def _vagrant_ssh_config(environment, boxes):
     ssh_config_file = ".vagrant/%s.ssh" % os.path.basename(environment)
     f = open(ssh_config_file, 'w')
@@ -441,7 +475,20 @@ def run(args, extra_args):
     else:
         if not args.ursula_user:
             args.ursula_user = "root"
-    rc = _run_ansible(inventory, args.playbook, extra_args=extra_args,
+    if args.adhoc:
+        args.module = "shell"
+        args.module_args = args.adhoc
+    if args.module:
+        if not args.module_args:
+            raise Exception(
+                "--module also requires --module-args")
+        if not args.module_hosts:
+            args.module_hosts = "all"
+        rc = _run_module(inventory, args.module, module_args=args.module_args,
+                      module_hosts=args.module_hosts, extra_args=extra_args,
+                      user=args.ursula_user, sudo=args.ursula_sudo)
+    else:
+        rc = _run_ansible(inventory, args.playbook, extra_args=extra_args,
                       user=args.ursula_user, sudo=args.ursula_sudo)
     return rc
 
@@ -464,6 +511,18 @@ def parse_args():
     parser.add_argument('--provisioner',
                         help='The external provisioner to use',
                         default=None, choices=["vagrant", "heat"])
+    parser.add_argument('--adhoc',
+                        help='Alias for --module=shell --module-args=',
+                        default=None)
+    parser.add_argument('--module',
+                        help='run an arbitrary ansible module.',
+                        default=None)
+    parser.add_argument('--module-args',
+                        help='args to pass to arbitrary module',
+                        default=None)
+    parser.add_argument('--module-hosts',
+                        help='host pattern for arbitrary module',
+                        default=None)
     parser.add_argument(
         '--heat-stack-name', default=None,
         help='Name of the heat stack when heat provisioner is used',
