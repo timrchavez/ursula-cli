@@ -74,7 +74,8 @@ def _check_ansible_version():
         raise Exception("You are using ansible-playbook '%s'. "
                         "Current required version is at least: '%s'. You may "
                         "install the correct version with 'pip install -U -r "
-                        "requirements.txt'" % (version, MINIMUM_ANSIBLE_VERSION))
+                        "requirements.txt'" % (
+                            version, MINIMUM_ANSIBLE_VERSION))
 
 
 def _append_envvar(key, value):
@@ -106,7 +107,7 @@ def test_ssh(host):
     try:
         sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         sock.connect((host, 22))
-    except Exception as e:
+    except Exception:
         return False
     return True
 
@@ -142,8 +143,8 @@ def _run_ansible(inventory, playbook, user='root', module_path='./library',
 
 
 def _run_module(inventory, module, module_args, module_hosts='all',
-                 user='root', module_path='./library', sudo=False,
-                 extra_args=[]):
+                user='root', module_path='./library', sudo=False,
+                extra_args=[]):
     command = [
         'ansible',
         module_hosts,
@@ -164,7 +165,8 @@ def _run_module(inventory, module, module_args, module_hosts='all',
 
     LOG.debug("Running command: %s with environment: %s",
               " ".join(command), os.environ)
-    proc = subprocess.Popen(" ".join(command), env=os.environ.copy(), shell=True,
+    proc = subprocess.Popen(" ".join(command), env=os.environ.copy(),
+                            shell=True,
                             stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT)
 
@@ -224,6 +226,7 @@ def _ssh_add(keyfile):
 
 def _run_heat(args, hot):
     try:
+        from heatclient.common import utils
         from heatclient.client import Client as Heat_Client
         from keystoneclient.v2_0 import Client as Keystone_Client
     except ImportError as e:
@@ -260,6 +263,9 @@ def _run_heat(args, hot):
         'template': hot
     }
 
+    if args.heat_parameters:
+        STACK['parameters'] = utils.format_parameters(args.heat_parameters)
+
     LOG.debug("Logging into heat")
 
     ks_client = Keystone_Client(**CREDS)
@@ -278,20 +284,28 @@ def _run_heat(args, hot):
         else:
             raise Exception(e)
 
-    if not stack_exists:
+    stack_action = 'create'
+
+    if stack_exists and args.heat_stack_update:
+        stack_action = 'update'
+        LOG.debug("Updating stack")
+        heatclient.stacks.update(stack_name, **STACK)
+        time.sleep(5)
+    elif not stack_exists:
         LOG.debug("Creating stack")
         heatclient.stacks.create(**STACK)
         time.sleep(5)
-        while heatclient.stacks.get(stack_name).status == 'IN_PROGRESS':
-            LOG.debug("Waiting on stack creation...")
-            time.sleep(5)
+
+    while heatclient.stacks.get(stack_name).status == 'IN_PROGRESS':
+        LOG.debug("Waiting on stack...")
+        time.sleep(5)
 
     stack = heatclient.stacks.get(stack_name)
     if stack.status != 'COMPLETE':
         raise Exception("stack %s returned an unexpected status (%s)" %
                         (stack_name, stack.status))
 
-    LOG.debug("Stack created!")
+    LOG.debug("Stack %sd!" % stack_action)
 
     servers = {}
     floating_ip = None
@@ -485,11 +499,11 @@ def run(args, extra_args):
         if not args.module_hosts:
             args.module_hosts = "all"
         rc = _run_module(inventory, args.module, module_args=args.module_args,
-                      module_hosts=args.module_hosts, extra_args=extra_args,
-                      user=args.ursula_user, sudo=args.ursula_sudo)
+                         module_hosts=args.module_hosts, extra_args=extra_args,
+                         user=args.ursula_user, sudo=args.ursula_sudo)
     else:
         rc = _run_ansible(inventory, args.playbook, extra_args=extra_args,
-                      user=args.ursula_user, sudo=args.ursula_sudo)
+                          user=args.ursula_user, sudo=args.ursula_sudo)
     return rc
 
 
@@ -527,6 +541,16 @@ def parse_args():
         '--heat-stack-name', default=None,
         help='Name of the heat stack when heat provisioner is used',
     )
+    parser.add_argument(
+        '--heat-stack-update', default=False, action='store_true',
+        help='Update the heat stack',
+    )
+    parser.add_argument(
+        '--heat-parameters', metavar='<KEY1=VALUE1;KEY2=VALUE2...>',
+           help='Parameter values used to create the stack. '
+                'This can be specified multiple times, or once with '
+                'parameters separated by a semicolon.',
+           action='append')
     parser.add_argument('--vagrant', action='store_true',
                         help='Provision environment in vagrant')
     parser.add_argument('--ursula-sudo', action='store_true',
