@@ -1,3 +1,5 @@
 ansible
 pbr
 PyYAML
+python-keystoneclient
+python-heatclient
