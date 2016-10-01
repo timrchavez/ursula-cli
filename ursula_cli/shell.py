@@ -178,7 +178,8 @@ def _run_module(inventory, module, module_args, module_hosts='all',
 
 
 def _vagrant_ssh_config(environment, boxes):
-    ssh_config_file = ".vagrant/%s.ssh" % os.path.basename(environment)
+    rel_ssh_config_file = ".vagrant/%s.ssh" % os.path.basename(environment)
+    ssh_config_file = os.path.abspath(rel_ssh_config_file)
     f = open(ssh_config_file, 'w')
     for box in boxes:
         command = [
@@ -365,7 +366,7 @@ Host {server}
         with open("tmp/ssh_config", "a") as text_file:
             text_file.write(ssh_config)
 
-    ansible_ssh_config_file = "tmp/ssh_config"
+    ansible_ssh_config_file = os.path.abspath("tmp/ssh_config")
     if os.path.isfile(ansible_ssh_config_file):
         _append_envvar("ANSIBLE_SSH_ARGS", "-F %s" % ansible_ssh_config_file)
 
@@ -445,9 +446,11 @@ def run(args, extra_args):
         raise Exception("Inventory file '%s' does not exist" % inventory)
 
     if args.ursula_ssh_config:
-        ansible_ssh_config_file = args.ursula_ssh_config
+        rel_ansible_ssh_config_file = args.ursula_ssh_config
     else:
-        ansible_ssh_config_file = os.path.join(args.environment, 'ssh_config')
+        rel_ansible_ssh_config_file = os.path.join(args.environment,
+                                                   'ssh_config')
+    ansible_ssh_config_file = os.path.abspath(rel_ansible_ssh_config_file)
     if os.path.isfile(ansible_ssh_config_file):
         _append_envvar("ANSIBLE_SSH_ARGS", "-F %s" % ansible_ssh_config_file)
 
